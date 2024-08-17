@@ -18,6 +18,8 @@ from sklearn.metrics import recall_score
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.preprocessing import image
+import numpy as np
 
 # Local Imports
 from load_covid import *
@@ -35,6 +37,44 @@ else:
     # Add current directory to Python's module search path
     CNN = importlib.import_module(f"{parent_directory}.cnn").CNN
     import utils
+
+def load_and_preprocess_image(image_path: str):
+    """
+    Load an image from a file and preprocess it for model prediction.
+    Args:
+        image_path (str): Path to the image file.
+    Returns:
+        np.ndarray: Preprocessed image ready for prediction.
+    """
+    img = image.load_img(image_path, target_size=(224, 224))  # Adjust the size according to your model's input shape
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array = img_array / 255.0  # Normalize to [0,1] range if needed by your model
+    return img_array
+
+def classify_image(model, image_path: str):
+    """
+    Classify an image using the trained model.
+    Args:
+        model (tf.keras.Model): Trained model to use for prediction.
+        image_path (str): Path to the image to classify.
+    Returns:
+        str: Predicted label for the image.
+    """
+    # Load and preprocess the image
+    img_array = load_and_preprocess_image(image_path)
+
+    # Predict the class
+    predictions = model.predict(img_array)
+
+    # Get the predicted class index
+    predicted_class_index = np.argmax(predictions, axis=-1)[0]
+
+    # Assuming your model has a label map, you can map the predicted index to the class name
+    # labels = ['class0', 'class1', 'class2']  # Example of labels
+    predicted_label = labels[predicted_class_index]
+    return predicted_label
+
 
 
 if __name__ == "__main__":
@@ -104,21 +144,38 @@ if __name__ == "__main__":
                 print("::::::::::::::::::::::::")
                 print(w.shape) 
             return utils.get_model_parameters(self.model)
-
-        # NB: Use this for default federated learning (changes in server.py also needed)
-        """ def fit(self, parameters, config):  # type: ignore
-            utils.set_model_params(self.model, parameters)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                self.model.fit(X_train, y_train, X_val, y_val, epochs=15)
-            return utils.get_model_parameters(self.model), len(X_train), {} """
         
         # NB: Use this for lattice encrypted federated learning (changes in server.py also needed)
+        # def fit(self, parameters, config):  # type: ignore
+        #     with warnings.catch_warnings():
+        #         warnings.simplefilter("ignore")
+        #         self.model.fit(X_train, y_train, X_val, y_val, epochs=15)
+        #     return [], len(X_train), {}
+        # def fit(self, parameters, config):  # type: ignore
+        #     with warnings.catch_warnings():
+        #         warnings.simplefilter("ignore")
+        #         self.model.fit(X_train, y_train, X_val, y_val, epochs=15)
+            
+        #     # Add some custom metrics
+        #     custom_message = "Training complete on client side"
+        #     accuracy = self.model.evaluate(X_val, y_val)[1]  # Example accuracy calculation
+
+        #     # Return the custom message and metrics to the server
+        #     return [], len(X_train), {"message": custom_message, "accuracy": accuracy}
         def fit(self, parameters, config):  # type: ignore
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 self.model.fit(X_train, y_train, X_val, y_val, epochs=15)
-            return [], len(X_train), {}
+            
+            # Get the updated model parameters
+            updated_params = utils.get_model_parameters(self.model)
+            
+            # Return the updated parameters, the number of training samples, and custom metrics
+            custom_message = "Training complete on client side"
+            accuracy = self.model.evaluate(X_val, y_val)[1]  # Example accuracy calculation
+            return updated_params, len(X_train), {"message": custom_message, "accuracy": accuracy}
+
+
 
         def evaluate(self, parameters, config):  # type: ignore
             utils.set_model_params(self.model, parameters)
@@ -242,6 +299,12 @@ if __name__ == "__main__":
         server_address="0.0.0.0:8080",
         client=CnnClient(rlwe, WEIGHT_DECIMALS)
     )
+    # Assume that the federated training is completed and you have a trained model
+    image_name = input("Enter the name of the image you want to classify: ")
+    image_path = f"data/{image_name}.jpg"  # Assuming images are stored in an 'images' folder
+
+    predicted_label = classify_image(self.model.model, image_path)
+    print(f"The predicted label for the image '{image_name}' is: {predicted_label}")
 
     # Stop recording memory usage
     memory_usage_end = memory_usage()[0]

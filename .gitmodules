@@ -1,0 +1,6 @@
+[submodule "rlwe-xmkckks"]
+	path = rlwe-xmkckks
+	url = https://github.com/MetisPrometheus/rlwe-xmkckks
+[submodule "flower-xmkckks"]
+	path = flower-xmkckks
+	url = https://github.com/MetisPrometheus/flower-xmkckks

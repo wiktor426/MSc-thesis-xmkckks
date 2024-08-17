@@ -46,6 +46,8 @@ def get_evaluate_fn(model):
 
     # The 'evaluate' function will be called after every round
     def evaluate(server_round: int, parameters: NDArrays, config: Dict[str, Scalar]) -> Optional[Tuple[float, Dict[str, Scalar]]]:
+        print(f"Parameters length: {len(parameters)}")
+        print(f"Parameters: {parameters}")
         utils.set_model_params(model, parameters)
 
         y_pred = model.model.predict(X_test)
@@ -57,12 +59,28 @@ def get_evaluate_fn(model):
 
         return loss, {"accuracy": accuracy}
     return evaluate
+def aggregate_fit_metrics(metrics_list):
+    # Calculate the average accuracy across clients
+    accuracies = [metrics["accuracy"] for _, metrics in metrics_list if "accuracy" in metrics]
+    avg_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0.0
+    
+    return {"avg_accuracy": avg_accuracy}
 
 
 class CustomFedAvg(FedAvg):
     def __init__(self, rlwe_instance: RLWE, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rlwe = rlwe_instance
+
+    def aggregate_fit(self, rnd: int, results: List[Tuple[str, fl.common.FitRes]], failures: List[str]) -> Tuple[NDArrays, Dict[str, Scalar]]:
+        # This method is called after receiving fit results from all clients
+        print(f"Round {rnd}: Received {len(results)} results from clients")
+        
+        for client_idx, (client_id, fit_res) in enumerate(results):
+            print(f"Client {client_id} - Fit result metrics: {fit_res.metrics}")
+
+        # Call the original aggregation method
+        return super().aggregate_fit(rnd, results, failures)
 
     # Might be useful to overwrite this function if choosing to aggregate differently by using flower's own training loop
     #def aggregate_fit(self, rnd: int, results: List[Tuple[str, CustomFitRes]], failures: List[str]) -> Tuple[List[np.ndarray], Dict[str, Scalar]]:
@@ -108,6 +126,7 @@ if __name__ == "__main__":
             evaluate_fn=get_evaluate_fn(model),
             on_fit_config_fn=fit_round,
             rlwe_instance=rlwe,
+            fit_metrics_aggregation_fn=aggregate_fit_metrics
         )
 
         # Define Server and Client Manager
